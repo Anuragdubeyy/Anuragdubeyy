@@ -93,14 +93,6 @@ I'm a Full-Stack Developer with expertise in:
 
 ---
 
-# 🐍 Snake Contribution Graph
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Anuragdubeyy/Anuragdubeyy/output/github-contribution-grid-snake.svg" />
-</p>
-
----
-
 ## 🤝 Connect With Me
 
 📩 Email: **anuragp220303@gmail.com**  

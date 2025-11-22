@@ -1,23 +1,90 @@
 name: Generate Snake
 
+# Run manually and on schedule
 on:
-  schedule:
-    - cron: "0 */12 * * *"
   workflow_dispatch:
+  schedule:
+    - cron: '0 */12 * * *'
+
+permissions:
+  contents: write   # allow the workflow to push files
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: Platane/snk@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          github_user_name: "Anuragdubeyy"
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Generate snake SVG
+        # Platane/snk generates the contribution-snake in dist/
+        uses: Platane/snk@v3
+        with:
+          github_user_name: 'Anuragdubeyy'
           outputs: |
             dist/github-contribution-grid-snake.svg
-      - name: Push snake animation
-        uses: crazy-max/ghaction-github-pages@v4
+
+      - name: List generated files (debug)
+        run: |
+          echo "Files in working dir:"
+          ls -la
+          echo "Files in dist:"
+          ls -la dist || true
+
+      - name: Commit & push generated snake (to branch 'output')
+        # Use a stable action to publish to a branch
+        uses: actions/github-script@v6
         with:
-          target_branch: output
-          build_dir: dist
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const path = 'dist/github-contribution-grid-snake.svg';
+            if (!fs.existsSync(path)) {
+              core.setFailed(`Expected file not found: ${path}`);
+            } else {
+              const content = fs.readFileSync(path, { encoding: 'base64' });
+              const owner = context.repo.owner;
+              const repo = context.repo.repo;
+              const branch = 'output';
+              // Check if branch exists
+              try {
+                await github.repos.getBranch({ owner, repo, branch });
+                // update file if exists
+                try {
+                  const res = await github.repos.getContent({ owner, repo, path, ref: branch });
+                  await github.repos.createOrUpdateFileContents({
+                    owner, repo, path,
+                    message: 'chore: update snake svg',
+                    content,
+                    branch,
+                    sha: res.data.sha
+                  });
+                } catch (err) {
+                  // file doesn't exist on branch - create it
+                  await github.repos.createOrUpdateFileContents({
+                    owner, repo, path,
+                    message: 'chore: add snake svg',
+                    content,
+                    branch
+                  });
+                }
+              } catch (err) {
+                // branch doesn't exist - create it from default branch
+                const defaultBranch = (await github.repos.get({ owner, repo })).data.default_branch;
+                const ref = await github.git.getRef({ owner, repo, ref: `heads/${defaultBranch}` });
+                const baseSha = ref.data.object.sha;
+                // create branch
+                await github.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: baseSha });
+                // create file on new branch
+                await github.repos.createOrUpdateFileContents({
+                  owner, repo, path,
+                  message: 'chore: add snake svg',
+                  content,
+                  branch
+                });
+              }
+            }
